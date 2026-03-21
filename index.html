@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="classic">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta property="og:title" content="羅朱小工具" />
+    <meta property="og:description" content="漠漠製作，透過即時 P2P 同步標記，輔助隊伍順利通關羅密歐與茱麗葉 PQ。" />
+    <title>羅朱小工具</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="./index.css">
+</head>
+
+<body>
+    <div id="theme-picker">
+        <div class="tp-box">
+            <div class="tp-title">🎨 選擇主題風格</div>
+            <div class="tp-grid" id="tp-grid"></div>
+            <button class="tp-close" id="btn-theme-close">✕ 關閉</button>
+        </div>
+    </div>
+
+    <div id="toast-stack"></div>
+
+    <div class="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <b id="load-msg" style="color:var(--spinner)">系統連線中...</b>
+        </div>
+
+        <div class="header">
+            <span class="title">⚔️ 羅朱小工具</span>
+            <div class="header-right">
+                <button class="theme-btn" id="btn-theme" title="切換主題">🎨</button>
+                <span class="guild">漠漠製作</span>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="panel">
+                <div class="nickname-box">
+                    <input type="text" id="nick-input" maxlength="10" placeholder="輸入暱稱 (中英數)...">
+                    <div class="action-group">
+                        <button class="ms-btn primary" id="btn-save-nick">確定暱稱</button>
+                        <button class="ms-btn" id="btn-edit-nick" style="display:none">修改暱稱</button>
+                        <button class="ms-btn" id="btn-copy" style="display:none">📋 邀請</button>
+                        <button class="ms-btn danger" id="btn-leave" style="display:none">離開</button>
+                    </div>
+                </div>
+
+                <div id="conn-panel">
+                    <div class="panel-label"><span>📡 房間設定</span></div>
+                    <div id="init-actions">
+                        <button class="ms-btn primary" id="btn-host" style="flex:1;min-width:100px">🏠 建立房間</button>
+                    </div>
+                    <div class="join-box" id="join-row" style="display:none">
+                        <input type="text" id="join-id" placeholder="貼上房號 (ID)..." style="flex:1">
+                        <button class="ms-btn" id="btn-join">加入</button>
+                    </div>
+                </div>
+
+                <div class="panel-label"><span>👥 房間成員</span></div>
+                <div class="participant-list" id="participant-list"></div>
+
+                <div class="log-section">
+                    <div class="log-header" id="btn-log-header">
+                        <span>系統日誌</span>
+                        <button class="ms-btn" id="btn-log-toggle">顯示</button>
+                    </div>
+                    <div class="log-panel" id="log-panel">
+                        <div class="log-entry">> 請先設定暱稱後開始。</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-area" id="map-grid"></div>
+
+            <div class="footer-tools">
+                <button class="ms-btn danger" id="btn-reset-all" style="flex:1;display:none">🗑️ 清空標記</button>
+                <button class="ms-btn" id="btn-reconnect">🔄 重新連線</button>
+            </div>
+
+            <div class="instructions">
+                🕹️ <b>電腦</b>: 點擊 = 正確路徑 ／ 右鍵 = 死路（僅自己可見）<br>
+                📱 <b>手機</b>: 點擊 = 正確路徑 ／ 雙擊 = 死路（僅自己可見）<br>
+                ⚠️ <b>規則</b>: 每人每層限標一格，不可重複佔用他人位置<br>
+                📢 <b>注意</b>: 公共 Wi-Fi 或嚴格防火牆下可能連線困難
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./index.js"></script>
+</body>
+
+</html>

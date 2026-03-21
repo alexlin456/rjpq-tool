@@ -271,22 +271,31 @@ export class AppController {
     }
 
     /**
-     * 清空所有標記（僅房主可操作）。
+     * 清空所有標記。
+     * 房主：清空全員標記並廣播 RESET；一般成員：僅清除自己的標記。
      */
     #resetAll() {
-        if (!this.isHost) {
-            return;
+        if (this.isHost) {
+            if (!window.confirm("確定要清空所有人的標記嗎？")) {
+                return;
+            }
+            this.mapState.reset();
+            this.streak.reset();
+            this.grid.clearAllDoors();
+            this.peerService.broadcast({ type: "RESET" });
+            this.toast.show("🗑️", "標記已全部清空", "所有成員的標記已重置，重新出發！", "", 2600);
+        } else {
+            if (!window.confirm("確定要清除你在所有層的標記嗎？")) {
+                return;
+            }
+            const changed = this.mapState.removeOwner(this.myNick);
+            changed.forEach(({ floor, door }) => {
+                this.grid.updateDoor(floor, door, this.mapState.getCell(floor, door));
+                this.peerService.broadcast({ type: "SYNC", f: floor, d: door, v: 0, owner: null });
+            });
+            this.streak.reset();
+            this.toast.show("🗑️", "已清除你的標記", "你在所有層的標記已移除。", "", 2600);
         }
-
-        if (!window.confirm("確定要清空所有人的標記嗎？")) {
-            return;
-        }
-
-        this.mapState.reset();
-        this.streak.reset();
-        this.grid.clearAllDoors();
-        this.peerService.broadcast({ type: "RESET" });
-        this.toast.show("🗑️", "標記已清空", "所有標記已重置，重新出發！", "", 2600);
     }
 
     /**
@@ -540,6 +549,7 @@ export class AppController {
                 this.logger.log("進入房間成功！", "success");
                 this.toast.show("✅", "成功加入房間", "地圖已同步，開始找路！", "", 3200);
                 this.elements.buttonLeave.style.display = "inline-flex";
+                this.elements.buttonReset.style.display = "inline-flex";
                 this.elements.connPanel.style.display = "none";
                 this.elements.joinInput.value = "";
                 window.history.replaceState(null, document.title, window.location.pathname);

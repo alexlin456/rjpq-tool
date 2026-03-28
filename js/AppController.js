@@ -5,7 +5,6 @@ import { LoggerService } from "./services/LoggerService.js";
 import { ThemeService } from "./services/ThemeService.js";
 import { GridService } from "./services/GridService.js";
 import { PeerService } from "./services/PeerService.js";
-import { StreakService } from "./services/StreakService.js";
 
 /**
  * 應用程式主控制器。
@@ -19,12 +18,14 @@ export class AppController {
     constructor() {
         this.isHost = false;
         this.myNick = "";
+        this.fixedPalette = ["#F4C20D", "#2D7FF9", "#2FA84F", "#FF8A00"];
+        /** @type {Record<string, string>} */
+        this.nickColorMap = {};
 
         /** @type {{floors: number, doors: number}} */
         this.constants = { floors: 10, doors: 4 };
 
         this.mapState = new MapState(this.constants.floors, this.constants.doors);
-        this.streak = new StreakService(this.constants.floors);
         this.toast = new ToastService("toast-stack");
         this.logger = new LoggerService("log-panel", "btn-log-toggle");
         this.theme = new ThemeService({
@@ -37,6 +38,7 @@ export class AppController {
             containerId: "map-grid",
             floors: this.constants.floors,
             doorsPerFloor: this.constants.doors,
+            getColorByNick: this.#resolveNickColor.bind(this),
         });
 
         this.peerService = new PeerService({
@@ -232,7 +234,6 @@ export class AppController {
         this.peerService.destroy();
         this.isHost = false;
         this.mapState.reset();
-        this.streak.reset();
         this.grid.clearAllDoors();
 
         this.elements.initActions.style.display = "flex";
@@ -280,7 +281,6 @@ export class AppController {
                 return;
             }
             this.mapState.reset();
-            this.streak.reset();
             this.grid.clearAllDoors();
             this.peerService.broadcast({ type: "RESET" });
             this.toast.show("🗑️", "標記已全部清空", "所有成員的標記已重置，重新出發！", "", 2600);
@@ -293,7 +293,6 @@ export class AppController {
                 this.grid.updateDoor(floor, door, this.mapState.getCell(floor, door));
                 this.peerService.broadcast({ type: "SYNC", f: floor, d: door, v: 0, owner: null });
             });
-            this.streak.reset();
             this.toast.show("🗑️", "已清除你的標記", "你在所有層的標記已移除。", "", 2600);
         }
     }
@@ -315,7 +314,6 @@ export class AppController {
         if (item.v === 1) {
             if (item.owner === this.myNick || this.isHost) {
                 this.mapState.setCell(floor, door, 0, null);
-                this.streak.clearFloor(floor);
             } else {
                 this.toast.show("🚫", "無法操作", `這格已被 ${item.owner} 標記，你無法移除。`, "", 2500);
                 return;
@@ -326,6 +324,19 @@ export class AppController {
                 return;
             }
 
+            // 檢查是否有 3 個或以上的死路標記（即其他玩家都說不是這門）
+            if (item.errorOwners && item.errorOwners.length >= 3 && item.v !== 1) {
+                const doorName = ["最左門", "左二門", "右二門", "最右門"][door] || `第${door + 1}門`;
+                const floorName = `L${this.constants.floors - floor}`;
+                this.toast.show(
+                    "✓",
+                    "門選提示",
+                    `${floorName}-${doorName}：${item.errorOwners.length} 位隊友都標記為死路，這應該就是正確的門了！`,
+                    "",
+                    4500,
+                );
+            }
+
             const removedDoors = this.mapState.clearOwnerMarksOnFloor(floor, this.myNick, door);
             removedDoors.forEach((removedDoor) => {
                 this.grid.updateDoor(floor, removedDoor, this.mapState.getCell(floor, removedDoor));
@@ -333,7 +344,6 @@ export class AppController {
             });
 
             this.mapState.setCell(floor, door, 1, this.myNick);
-            this.#showStreakToast(floor, door);
         }
 
         this.grid.updateDoor(floor, door, this.mapState.getCell(floor, door));
@@ -348,35 +358,21 @@ export class AppController {
 
     /**
      * 處理門格右鍵點擊（死路標記）。
+     * 會同步死路標記給其他玩家。
      *
      * @param {number} floor 樓層索引。
      * @param {number} door 門索引。
      */
     #handleDoorRightClick(floor, door) {
-        this.grid.toggleErrorMark(floor, door);
-    }
-
-    /**
-     * 顯示連續同門趣味提示。
-     *
-     * @param {number} floor 樓層索引。
-     * @param {number} door 門索引。
-     */
-    #showStreakToast(floor, door) {
-        const result = this.streak.markAndCheck(floor, door);
-        if (!result.message) {
-            return;
-        }
-
-        const doorNames = ["最左門", "左二門", "右二門", "最右門"];
-        const doorName = doorNames[door] || `第${door + 1}門`;
-        this.toast.show(
-            result.message.icon,
-            `${doorName} × ${result.count} 連！${result.message.title}`,
-            result.message.msg,
-            "fun",
-            5200,
-        );
+        this.mapState.toggleErrorMark(floor, door, this.myNick);
+        this.grid.updateDoor(floor, door, this.mapState.getCell(floor, door));
+        this.#syncOut({
+            type: "ERROR_MARK",
+            f: floor,
+            d: door,
+            nick: this.myNick,
+            errorOwners: this.mapState.getCell(floor, door).errorOwners,
+        });
     }
 
     /**
@@ -422,15 +418,41 @@ export class AppController {
     }
 
     /**
+     * 依照成員順序重建顏色對照表。
+     * 前 4 位使用固定高對比色，超過後交由暱稱色備援。
+     *
+     * @param {Array<{nick: string, isHost: boolean}>} tags 成員標籤資料。
+     */
+    #rebuildNickColorMap(tags) {
+        this.nickColorMap = {};
+        tags.forEach((tagInfo, index) => {
+            if (index < this.fixedPalette.length) {
+                this.nickColorMap[tagInfo.nick] = this.fixedPalette[index];
+            }
+        });
+    }
+
+    /**
+     * 取得指定暱稱顏色。
+     *
+     * @param {string} nick 玩家暱稱。
+     * @returns {string} 顏色字串。
+     */
+    #resolveNickColor(nick) {
+        return this.nickColorMap[nick] || Helper.getNickColor(nick);
+    }
+
+    /**
      * 渲染成員標籤。
      *
      * @param {Array<{nick: string, isHost: boolean}>} tags 成員標籤資料。
      */
     #renderParticipants(tags) {
+        this.#rebuildNickColorMap(tags);
         this.elements.participantList.innerHTML = "";
         tags.forEach((tagInfo) => {
             const tag = document.createElement("span");
-            const color = Helper.getNickColor(tagInfo.nick);
+            const color = this.#resolveNickColor(tagInfo.nick);
             tag.className = `participant-tag${tagInfo.isHost ? " host" : ""}`;
             tag.style.borderColor = color;
             tag.style.color = color;
@@ -493,7 +515,13 @@ export class AppController {
         this.toast.show("👋", `${user.nick} 離開了`, "其標記已被移除。", "", 2800);
 
         const removed = this.mapState.removeOwner(user.nick);
+        const errorRemoved = this.mapState.removeErrorOwner(user.nick);
+        
         removed.forEach((item) => {
+            this.grid.updateDoor(item.floor, item.door, this.mapState.getCell(item.floor, item.door));
+        });
+        
+        errorRemoved.forEach((item) => {
             this.grid.updateDoor(item.floor, item.door, this.mapState.getCell(item.floor, item.door));
         });
 
@@ -538,7 +566,7 @@ export class AppController {
                 this.isHost = false;
                 this.peerService.connections[conn.peer] = { conn, nick: "房主" };
                 this.mapState.loadSnapshot(data.state);
-                this.streak.reset();
+                this.#rebuildNickColorMap(data.users);
 
                 for (let floor = 0; floor < this.constants.floors; floor += 1) {
                     for (let door = 0; door < this.constants.doors; door += 1) {
@@ -582,8 +610,15 @@ export class AppController {
             }
             case "RESET": {
                 this.mapState.reset();
-                this.streak.reset();
                 this.grid.clearAllDoors();
+                if (this.isHost) {
+                    this.peerService.broadcast(data, conn);
+                }
+                break;
+            }
+            case "ERROR_MARK": {
+                this.mapState.mapData[data.f][data.d].errorOwners = data.errorOwners;
+                this.grid.updateDoor(data.f, data.d, this.mapState.getCell(data.f, data.d));
                 if (this.isHost) {
                     this.peerService.broadcast(data, conn);
                 }

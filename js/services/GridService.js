@@ -21,6 +21,7 @@ export class GridService {
         this.container = /** @type {HTMLElement} */ (document.getElementById(options.containerId || "map-grid"));
         this.floors = options.floors || 10;
         this.doorsPerFloor = options.doorsPerFloor || 4;
+        this.getColorByNick = options.getColorByNick || ((nick) => Helper.getNickColor(nick));
         this.onLeftClick = null;
         this.onRightClick = null;
     }
@@ -86,9 +87,18 @@ export class GridService {
         doorElement.className = "door";
         doorElement.id = `d-${floor}-${door}`;
 
+        const number = document.createElement("div");
+        number.className = "door-number";
+        number.innerText = String(door + 1);
+        doorElement.appendChild(number);
+
         const tag = document.createElement("div");
         tag.className = "door-tag";
         doorElement.appendChild(tag);
+
+        const errorTag = document.createElement("div");
+        errorTag.className = "error-tag";
+        doorElement.appendChild(errorTag);
 
         let lastTouch = 0;
         doorElement.addEventListener("touchstart", (event) => {
@@ -123,7 +133,7 @@ export class GridService {
      *
      * @param {number} floor 樓層索引。
      * @param {number} door 門索引。
-     * @param {{v: number, owner: string | null}} cell 格子資料。
+     * @param {{v: number, owner: string | null, errorOwners: string[]}} cell 格子資料。
      */
     updateDoor(floor, door, cell) {
         const element = this.getDoorElement(floor, door);
@@ -131,18 +141,28 @@ export class GridService {
             return;
         }
         const tag = /** @type {HTMLElement} */ (element.querySelector(".door-tag"));
+        const errorTag = /** @type {HTMLElement} */ (element.querySelector(".error-tag"));
 
+        // 更新正確標記
         if (cell.v === 1 && cell.owner) {
             element.classList.add("state-pass");
             element.classList.remove("state-error");
-            element.style.setProperty("--marker-color", Helper.getNickColor(cell.owner));
+            element.style.setProperty("--marker-color", this.getColorByNick(cell.owner));
             tag.innerText = cell.owner;
-            return;
+        } else {
+            element.classList.remove("state-pass");
+            element.style.removeProperty("--marker-color");
+            tag.innerText = "";
         }
 
-        element.classList.remove("state-pass");
-        element.style.removeProperty("--marker-color");
-        tag.innerText = "";
+        // 更新死路標記
+        if (cell.errorOwners && cell.errorOwners.length > 0) {
+            element.classList.add("has-error-mark");
+            errorTag.innerText = cell.errorOwners.join(", ");
+        } else {
+            element.classList.remove("has-error-mark");
+            errorTag.innerText = "";
+        }
     }
 
     /**

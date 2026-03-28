@@ -20,12 +20,12 @@ export class MapState {
     /**
      * 建立空白地圖資料。
      *
-     * @returns {Array<Array<{v: number, owner: string | null}>>} 二維地圖資料。
+     * @returns {Array<Array<{v: number, owner: string | null, errorOwners: string[]}>>} 二維地圖資料。
      */
     #createEmptyMap() {
         return Array(this.floors)
             .fill(null)
-            .map(() => Array(this.doorsPerFloor).fill(null).map(() => ({ v: 0, owner: null })));
+            .map(() => Array(this.doorsPerFloor).fill(null).map(() => ({ v: 0, owner: null, errorOwners: [] })));
     }
 
     /**
@@ -33,7 +33,7 @@ export class MapState {
      *
      * @param {number} floor 樓層索引。
      * @param {number} door 門索引。
-     * @returns {{v: number, owner: string | null}} 格子狀態。
+     * @returns {{v: number, owner: string | null, errorOwners: string[]}} 格子狀態。
      */
     getCell(floor, door) {
         return this.mapData[floor][door];
@@ -85,6 +85,45 @@ export class MapState {
                 if (this.mapData[f][d].owner === owner) {
                     this.mapData[f][d].v = 0;
                     this.mapData[f][d].owner = null;
+                    changed.push({ floor: f, door: d });
+                }
+                // 同時移除該玩家的死路標記
+                this.mapData[f][d].errorOwners = this.mapData[f][d].errorOwners.filter((n) => n !== owner);
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * 切換死路標記。
+     *
+     * @param {number} floor 樓層索引。
+     * @param {number} door 門索引。
+     * @param {string} nick 玩家暱稱。
+     */
+    toggleErrorMark(floor, door, nick) {
+        const cell = this.mapData[floor][door];
+        const idx = cell.errorOwners.indexOf(nick);
+        if (idx > -1) {
+            cell.errorOwners.splice(idx, 1);
+        } else {
+            cell.errorOwners.push(nick);
+        }
+    }
+
+    /**
+     * 清除指定玩家在全圖上的死路標記。
+     *
+     * @param {string} owner 玩家暱稱。
+     * @returns {Array<{floor: number, door: number}>} 回傳所有被清除的位置。
+     */
+    removeErrorOwner(owner) {
+        const changed = [];
+        for (let f = 0; f < this.floors; f += 1) {
+            for (let d = 0; d < this.doorsPerFloor; d += 1) {
+                const idx = this.mapData[f][d].errorOwners.indexOf(owner);
+                if (idx > -1) {
+                    this.mapData[f][d].errorOwners.splice(idx, 1);
                     changed.push({ floor: f, door: d });
                 }
             }

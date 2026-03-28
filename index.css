@@ -500,6 +500,15 @@
             position: relative;
             overflow: hidden;
         }
+
+        .door-number {
+            font-size: 16px;
+            font-weight: 800;
+            color: rgba(0,0,0,0.55);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+            line-height: 1;
+            z-index: 1;
+        }
         /* 高光層 */
         .door::before {
             content: '';
@@ -528,12 +537,20 @@
             65%  { transform: scale(1.07); }
             100% { transform: scale(1); opacity: 1; }
         }
-        .door.state-pass::after {
-            content: "✓";
-            color: #fff;
-            font-weight: bold;
-            font-size: 22px;
-            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+        .door.state-pass .door-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.92);
+            border: 2px solid rgba(0,0,0,0.3);
+            color: #1e2a2d;
+            text-shadow: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 900;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.25);
         }
 
         /* 已標記：死路（僅本地） */
@@ -569,6 +586,28 @@
             white-space: nowrap;
         }
         .door.state-pass .door-tag { display: block; }
+
+        /* 死路標記 */
+        .error-tag {
+            position: absolute;
+            top: 1px;
+            left: 2px;
+            font-size: 8px;
+            background: rgba(200, 0, 0, 0.85);
+            color: #fff;
+            padding: 1px 4px;
+            border-radius: 2px;
+            transform: scale(0.8);
+            pointer-events: none;
+            display: none;
+            max-width: 85%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: bold;
+            border: 1px solid rgba(255, 100, 100, 0.5);
+        }
+        .door.has-error-mark .error-tag { display: block; }
 
         /* ============================================================
            底部工具列 / 說明
@@ -750,10 +789,6 @@
             border: 1px solid rgba(255,255,255,0.1);
             animation: toastIn 0.35s cubic-bezier(0.175,0.885,0.32,1.275) both;
             width: 100%;
-        }
-        .toast.fun {
-            background: linear-gradient(135deg, rgba(70,30,110,0.96), rgba(30,15,70,0.96));
-            border-color: rgba(180,120,255,0.35);
         }
         .toast-icon { font-size: 26px; flex-shrink: 0; line-height: 1; }
         .toast-body { flex: 1; }

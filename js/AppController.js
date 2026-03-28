@@ -324,6 +324,20 @@ export class AppController {
                 return;
             }
 
+            // 檢查死路標記限制
+            if (item.errorOwners && item.errorOwners.length >= 3 && item.v !== 1) {
+                const doorName = ["最左門", "左二門", "右二門", "最右門"][door] || `第${door + 1}門`;
+                const floorName = `L${this.constants.floors - floor}`;
+                this.toast.show(
+                    "🚫",
+                    "無法標記",
+                    `${floorName}-${doorName} 已被 ${item.errorOwners.length} 位隊友標記為死路，無法標記為正確路線。`,
+                    "",
+                    3000,
+                );
+                return;
+            }
+
             const removedDoors = this.mapState.clearOwnerMarksOnFloor(floor, this.myNick, door);
             removedDoors.forEach((removedDoor) => {
                 this.grid.updateDoor(floor, removedDoor, this.mapState.getCell(floor, removedDoor));

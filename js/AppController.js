@@ -331,7 +331,7 @@ export class AppController {
                 this.toast.show(
                     "🚫",
                     "無法標記",
-                    `${floorName}-${doorName} 已被 ${item.errorOwners.length} 位隊友標記為死路，無法標記為正確路線。`,
+                    `${floorName}-${doorName} 死路標記已達 3 個，無法再被標記。`,
                     "",
                     3000,
                 );

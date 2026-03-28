@@ -324,20 +324,6 @@ export class AppController {
                 return;
             }
 
-            // 檢查死路標記限制
-            if (item.errorOwners && item.errorOwners.length >= 3 && item.v !== 1) {
-                const doorName = ["最左門", "左二門", "右二門", "最右門"][door] || `第${door + 1}門`;
-                const floorName = `L${this.constants.floors - floor}`;
-                this.toast.show(
-                    "🚫",
-                    "無法標記",
-                    `${floorName}-${doorName} 死路標記已達 3 個，無法再被標記。`,
-                    "",
-                    3000,
-                );
-                return;
-            }
-
             const removedDoors = this.mapState.clearOwnerMarksOnFloor(floor, this.myNick, door);
             removedDoors.forEach((removedDoor) => {
                 this.grid.updateDoor(floor, removedDoor, this.mapState.getCell(floor, removedDoor));
@@ -365,6 +351,22 @@ export class AppController {
      * @param {number} door 門索引。
      */
     #handleDoorRightClick(floor, door) {
+        const item = this.mapState.getCell(floor, door);
+
+        // 檢查死路標記限制：已有3個死路標記則禁止繼續標記
+        if (item.errorOwners && item.errorOwners.length >= 3 && item.errorOwners.indexOf(this.myNick) === -1) {
+            const doorName = ["最左門", "左二門", "右二門", "最右門"][door] || `第${door + 1}門`;
+            const floorName = `L${this.constants.floors - floor}`;
+            this.toast.show(
+                "🚫",
+                "無法標記",
+                `${floorName}-${doorName} 死路標記已達 3 個，無法再標記死路。`,
+                "",
+                3000,
+            );
+            return;
+        }
+
         this.mapState.toggleErrorMark(floor, door, this.myNick);
         this.grid.updateDoor(floor, door, this.mapState.getCell(floor, door));
         this.#syncOut({

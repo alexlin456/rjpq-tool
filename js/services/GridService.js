@@ -158,10 +158,12 @@ export class GridService {
         // 更新死路標記
         if (cell.errorOwners && cell.errorOwners.length > 0) {
             element.classList.add("has-error-mark");
-            errorTag.innerText = cell.errorOwners.join(", ");
+            errorTag.innerHTML = cell.errorOwners
+                .map((nick) => `<span class="error-mark-badge">${nick.charAt(0)}</span>`)
+                .join("");
         } else {
             element.classList.remove("has-error-mark");
-            errorTag.innerText = "";
+            errorTag.innerHTML = "";
         }
     }
 

@@ -324,19 +324,6 @@ export class AppController {
                 return;
             }
 
-            // 檢查是否有 3 個或以上的死路標記（即其他玩家都說不是這門）
-            if (item.errorOwners && item.errorOwners.length >= 3 && item.v !== 1) {
-                const doorName = ["最左門", "左二門", "右二門", "最右門"][door] || `第${door + 1}門`;
-                const floorName = `L${this.constants.floors - floor}`;
-                this.toast.show(
-                    "✓",
-                    "門選提示",
-                    `${floorName}-${doorName}：${item.errorOwners.length} 位隊友都標記為死路，這應該就是正確的門了！`,
-                    "",
-                    4500,
-                );
-            }
-
             const removedDoors = this.mapState.clearOwnerMarksOnFloor(floor, this.myNick, door);
             removedDoors.forEach((removedDoor) => {
                 this.grid.updateDoor(floor, removedDoor, this.mapState.getCell(floor, removedDoor));
@@ -619,6 +606,21 @@ export class AppController {
             case "ERROR_MARK": {
                 this.mapState.mapData[data.f][data.d].errorOwners = data.errorOwners;
                 this.grid.updateDoor(data.f, data.d, this.mapState.getCell(data.f, data.d));
+                
+                // 實時檢查：當某扇門有3個死路標記時，給未標記的玩家提示
+                const cell = this.mapState.getCell(data.f, data.d);
+                if (cell.errorOwners.length === 3 && cell.owner !== this.myNick && cell.errorOwners.indexOf(this.myNick) === -1) {
+                    const doorName = ["最左門", "左二門", "右二門", "最右門"][data.d] || `第${data.d + 1}門`;
+                    const floorName = `L${this.constants.floors - data.f}`;
+                    this.toast.show(
+                        "✓",
+                        "門選提示",
+                        `${floorName}-${doorName}：${cell.errorOwners.length} 位隊友都標記為死路，這應該就是正確的門了！`,
+                        "",
+                        4500,
+                    );
+                }
+                
                 if (this.isHost) {
                     this.peerService.broadcast(data, conn);
                 }

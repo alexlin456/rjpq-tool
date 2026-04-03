@@ -25,6 +25,10 @@ export class AppController {
         /** @type {{floors: number, doors: number}} */
         this.constants = { floors: 10, doors: 4 };
 
+        /** 自動清空相關 */
+        this.autoClearEnabled = false;
+        this.autoClearTimerId = null;
+
         this.mapState = new MapState(this.constants.floors, this.constants.doors);
         this.toast = new ToastService("toast-stack");
         this.logger = new LoggerService("log-panel", "btn-log-toggle");
@@ -90,6 +94,8 @@ export class AppController {
             initActions: document.getElementById("init-actions"),
             joinRow: document.getElementById("join-row"),
             connPanel: document.getElementById("conn-panel"),
+            autoClearCheckbox: document.getElementById("auto-clear-checkbox"),
+            autoClearHint: document.getElementById("auto-clear-hint"),
         };
     }
 
@@ -108,6 +114,7 @@ export class AppController {
         this.elements.buttonTheme.addEventListener("click", () => this.theme.openPicker());
         this.elements.buttonThemeClose.addEventListener("click", () => this.theme.closePicker());
         this.elements.buttonLogHeader.addEventListener("click", () => this.logger.toggle());
+        this.elements.autoClearCheckbox.addEventListener("change", this.#handleAutoClearToggle.bind(this));
     }
 
     /**
@@ -232,8 +239,10 @@ export class AppController {
      * 離開目前房間。
      */
     #leaveRoom() {
+        this.#stopAutoClearTimer();
         this.peerService.destroy();
         this.isHost = false;
+        this.autoClearEnabled = false;
         this.mapState.reset();
         this.grid.clearAllDoors();
 
@@ -246,6 +255,9 @@ export class AppController {
         this.elements.buttonHost.disabled = false;
         this.elements.buttonJoin.disabled = false;
         this.elements.participantList.innerHTML = "";
+        this.elements.autoClearCheckbox.checked = false;
+        this.elements.autoClearCheckbox.disabled = true;
+        this.elements.autoClearHint.style.display = "none";
 
         this.logger.log("連線已中斷。", "warn");
     }
@@ -342,6 +354,7 @@ export class AppController {
             v: this.mapState.getCell(floor, door).v,
             owner: this.mapState.getCell(floor, door).owner,
         });
+        this.#resetAutoClearTimer();
     }
 
     /**
@@ -377,6 +390,7 @@ export class AppController {
             nick: this.myNick,
             errorOwners: this.mapState.getCell(floor, door).errorOwners,
         });
+        this.#resetAutoClearTimer();
     }
 
     /**
@@ -393,6 +407,66 @@ export class AppController {
         const host = this.peerService.getMembers().find((member) => member.nick === "房主");
         if (host?.conn?.open) {
             host.conn.send(payload);
+        }
+    }
+
+    /**
+     * 自動清空 checkbox 狀態變更事件。
+     * 只有房主可以控制。
+     */
+    #handleAutoClearToggle() {
+        if (!this.isHost) {
+            this.elements.autoClearCheckbox.checked = this.autoClearEnabled;
+            return;
+        }
+
+        this.autoClearEnabled = this.elements.autoClearCheckbox.checked;
+        
+        if (this.autoClearEnabled) {
+            this.#startAutoClearTimer();
+            this.logger.log("已啟用自動清空：1 分鐘無操作將自動清空所有標記", "success");
+        } else {
+            this.#stopAutoClearTimer();
+            this.logger.log("已關閉自動清空", "warn");
+        }
+        
+        this.peerService.broadcast({
+            type: "AUTO_CLEAR_CONFIG",
+            enabled: this.autoClearEnabled,
+        });
+    }
+
+    /**
+     * 啟動自動清空計時器。
+     * 1 分鐘內無任何玩家操作則清空所有標記。
+     */
+    #startAutoClearTimer() {
+        this.#stopAutoClearTimer();
+        this.autoClearTimerId = window.setTimeout(() => {
+            if (this.autoClearEnabled && this.isHost) {
+                this.logger.log("[自動清空] 1 分鐘無操作，觸發自動清空", "info");
+                this.#resetAll();
+            }
+        }, 60000);
+    }
+
+    /**
+     * 停止自動清空計時器。
+     */
+    #stopAutoClearTimer() {
+        if (this.autoClearTimerId !== null) {
+            window.clearTimeout(this.autoClearTimerId);
+            this.autoClearTimerId = null;
+        }
+    }
+
+    /**
+     * 重置自動清空計時器。
+     * 在有玩家操作時呼叫。
+     */
+    #resetAutoClearTimer() {
+        if (this.autoClearEnabled && this.isHost) {
+            this.#startAutoClearTimer();
         }
     }
 
@@ -419,6 +493,18 @@ export class AppController {
             }
         });
         this.#renderParticipants(tags);
+        
+        // 更新自動清空 checkbox 的可用性
+        if (this.myNick && !this.isHost) {
+            this.elements.autoClearCheckbox.disabled = true;
+            this.elements.autoClearHint.style.display = "block";
+        } else if (this.myNick && this.isHost) {
+            this.elements.autoClearCheckbox.disabled = false;
+            this.elements.autoClearHint.style.display = "none";
+        } else {
+            this.elements.autoClearCheckbox.disabled = true;
+            this.elements.autoClearHint.style.display = "none";
+        }
     }
 
     /**
@@ -586,6 +672,10 @@ export class AppController {
                 this.elements.joinInput.value = "";
                 window.history.replaceState(null, document.title, window.location.pathname);
                 this.#renderParticipants(data.users);
+                
+                // 非房主禁用自動清空 checkbox
+                this.elements.autoClearCheckbox.disabled = true;
+                this.elements.autoClearHint.style.display = "block";
                 break;
             }
             case "NICK_LIST": {
@@ -636,6 +726,27 @@ export class AppController {
                         "",
                         4500,
                     );
+                }
+                
+                if (this.isHost) {
+                    this.peerService.broadcast(data, conn);
+                }
+                break;
+            }
+            case "AUTO_CLEAR_CONFIG": {
+                this.autoClearEnabled = data.enabled;
+                this.elements.autoClearCheckbox.checked = this.autoClearEnabled;
+                
+                if (this.autoClearEnabled) {
+                    if (this.isHost) {
+                        this.#startAutoClearTimer();
+                    }
+                    this.logger.log("房主已啟用自動清空功能", "info");
+                } else {
+                    if (this.isHost) {
+                        this.#stopAutoClearTimer();
+                    }
+                    this.logger.log("房主已停用自動清空功能", "info");
                 }
                 
                 if (this.isHost) {

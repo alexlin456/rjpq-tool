@@ -202,9 +202,11 @@ export class GridService {
                     continue;
                 }
                 const tag = /** @type {HTMLElement} */ (element.querySelector(".door-tag"));
-                element.classList.remove("state-pass", "state-error", "owner-self", "owner-other");
+                const errorTag = /** @type {HTMLElement} */ (element.querySelector(".error-tag"));
+                element.classList.remove("state-pass", "state-error", "has-error-mark", "owner-self", "owner-other");
                 element.style.removeProperty("--marker-color");
                 tag.innerText = "";
+                errorTag.innerHTML = "";
             }
         }
     }

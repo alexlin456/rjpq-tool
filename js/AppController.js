@@ -438,16 +438,29 @@ export class AppController {
 
     /**
      * 啟動自動清空計時器。
-     * 1 分鐘內無任何玩家操作則清空所有標記。
+     * 1 分鐘內無任何玩家操作則清空所有標記，並持續監控下一分鐘。
      */
     #startAutoClearTimer() {
         this.#stopAutoClearTimer();
         this.autoClearTimerId = window.setTimeout(() => {
             if (this.autoClearEnabled && this.isHost) {
                 this.logger.log("[自動清空] 1 分鐘無操作，觸發自動清空", "info");
-                this.#resetAll();
+                this.#performAutoReset();
+                // 清空後繼續監控下一分鐘
+                this.#startAutoClearTimer();
             }
         }, 60000);
+    }
+
+    /**
+     * 執行自動清空（不需確認）。
+     * 由計時器自動呼叫。
+     */
+    #performAutoReset() {
+        this.mapState.reset();
+        this.grid.clearAllDoors();
+        this.peerService.broadcast({ type: "RESET" });
+        this.toast.show("🗑️", "標記已全部清空", "所有成員的標記已重置，重新出發！", "", 2600);
     }
 
     /**
@@ -462,11 +475,12 @@ export class AppController {
 
     /**
      * 重置自動清空計時器。
-     * 在有玩家操作時呼叫。
+     * 在有玩家操作時呼叫，重新開始 1 分鐘倒數。
      */
     #resetAutoClearTimer() {
         if (this.autoClearEnabled && this.isHost) {
             this.#startAutoClearTimer();
+
         }
     }
 

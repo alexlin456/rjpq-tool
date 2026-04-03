@@ -39,6 +39,7 @@ export class AppController {
             floors: this.constants.floors,
             doorsPerFloor: this.constants.doors,
             getColorByNick: this.#resolveNickColor.bind(this),
+            getViewerNick: () => this.myNick,
         });
 
         this.peerService = new PeerService({

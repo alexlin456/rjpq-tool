@@ -22,6 +22,7 @@ export class GridService {
         this.floors = options.floors || 10;
         this.doorsPerFloor = options.doorsPerFloor || 4;
         this.getColorByNick = options.getColorByNick || ((nick) => Helper.getNickColor(nick));
+        this.getViewerNick = options.getViewerNick || (() => "");
         this.onLeftClick = null;
         this.onRightClick = null;
     }
@@ -145,12 +146,16 @@ export class GridService {
 
         // 更新正確標記
         if (cell.v === 1 && cell.owner) {
+            const isSelfOwner = cell.owner === this.getViewerNick();
             element.classList.add("state-pass");
             element.classList.remove("state-error");
+            element.classList.toggle("owner-self", isSelfOwner);
+            element.classList.toggle("owner-other", !isSelfOwner);
             element.style.setProperty("--marker-color", this.getColorByNick(cell.owner));
             tag.innerText = cell.owner;
         } else {
             element.classList.remove("state-pass");
+            element.classList.remove("owner-self", "owner-other");
             element.style.removeProperty("--marker-color");
             tag.innerText = "";
         }
@@ -197,7 +202,7 @@ export class GridService {
                     continue;
                 }
                 const tag = /** @type {HTMLElement} */ (element.querySelector(".door-tag"));
-                element.classList.remove("state-pass", "state-error");
+                element.classList.remove("state-pass", "state-error", "owner-self", "owner-other");
                 element.style.removeProperty("--marker-color");
                 tag.innerText = "";
             }
